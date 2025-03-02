@@ -3,38 +3,67 @@ import { storeToRefs } from 'pinia'
 import { useFlowChartStore } from '~/stores/flowChartStore'
 import { useGraphStore } from '~/stores/graphStore'
 import { usePdfStore } from '~/stores/pdfStore'
-
+import { useInteractionStore } from '~/stores/interaction'
 const pdfStore = usePdfStore()
+const interactionStore = useInteractionStore()
 const flowChartStore = useFlowChartStore() // 获取 store 实例
 const graphStore = useGraphStore()
-const { graph_data, node_list, centers } = storeToRefs(graphStore)
-const { img, ocr_result } = storeToRefs(flowChartStore)
-const { pdfContent } = storeToRefs(pdfStore)
-// 添加一个方法来发送 imgbase64 到 localhost:4444
+const { selectElement,selectedSentence } = storeToRefs(interactionStore)
+const {graph_edges, graph_nodes,other_edges } = storeToRefs(graphStore)
+const { flowchartImg, ocr_result,img_width,img_height,uni_ocr_result } = storeToRefs(flowChartStore)
+const { pdfContent, keywordsSentence,keywords,ai_output } = storeToRefs(pdfStore)
 export async function sendFlowChartApi() {
   try {
     const response = await axios.post('http://localhost:4444/uploadFlowChartApi', {
-      image_base64: img.value,
+      image_base64: flowchartImg.value,
     })
-    console.log(response.data.ocr_message)
     ocr_result.value = response.data.ocr_message
+    img_width.value = response.data.img_width
+    img_height.value = response.data.img_height
+    uni_ocr_result.value = response.data.uni_ocr_message
   }
   catch (error) {
     console.error('Error sending image:', error)
   }
 }
-export async function sendPdfTextApi() {
+export async function generateKnowledgeGraphApi() {
   try {
-    const response = await axios.post('http://localhost:4444/uploadPdfTextApi', {
+    const response = await axios.post('http://localhost:4444/generateKnowledgeGraphApi', {
       pdf_text: pdfContent.value,
-      ocr_result: ocr_result.value,
+      keywords: keywords.value,
+    })
+    graph_edges.value = response.data.edges
+    graph_nodes.value = response.data.nodes
+    console.log(response.data)
+  }
+  catch (error) {
+    console.error('Error sending image:', error)
+  }
+}
+export async function generateIntrodutionApi() {
+  try {
+    const response = await axios.post('http://localhost:4444/generateIntrodutionApi', {
+      sentences: selectedSentence.value,
+      keyword: selectElement.value,
+    })
+    ai_output.value = response.data.response
+  }
+  catch (error) {
+    console.error('Error sending image:', error)
+  }
+}
+
+export async function findEntitiesApi() {
+  try {
+    const response = await axios.post('http://localhost:4444/findEntitiesApi', {
+      sentences: keywordsSentence.value,
+      keywords: keywords.value,
     })
     console.log(response.data)
-    graph_data.value = response.data.graph_data
-    node_list.value = response.data.node_list
-    centers.value = response.data.centers
+    other_edges.value = response.data.edges
   }
   catch (error) {
     console.error('Error sending image:', error)
   }
 }
+

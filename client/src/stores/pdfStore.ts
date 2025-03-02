@@ -6,6 +6,11 @@ export const usePdfStore = defineStore('pdf', {
     pdfName: null,
     pdfContent: null,
     pdfUrl: null,
+    totalPage:0,
+    loadedPage:0,
+    keywordsSentence:[],
+    keywords:[],
+    ai_output:''
   }),
   getters: {
   },

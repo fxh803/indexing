@@ -1,8 +1,14 @@
 import paddleocr  # 添加: 导入paddleocr库
 import numpy as np
 from math import sqrt
-from utils.word_analyze import analyze_text
+from utils.bert_analyze import analyze_text
+import string
 import cv2  # 导入OpenCV库
+def remove_punctuation(text):
+    # 创建翻译表，将标点符号映射为 None
+    translator = str.maketrans('', '', string.punctuation)
+    # 使用 translate 方法去除标点符号
+    return text.translate(translator)
 def rectangles_intersect_or_touch(rect1, rect2):
     # 检查两个矩形是否相交或接触
     # rect1 and rect2 are in the format [left_top, right_top, right_bottom, left_bottom]
@@ -68,11 +74,16 @@ def ocr_image(image):
                     combined_result.append([processed_result[i][0] ,processed_result[i][1]])
         
     #使用OpenCV绘制矩形框并添加文本
-    # for rect, text in combined_result:
-    #     top_left = tuple(map(int, rect[0]))
-    #     bottom_right = tuple(map(int, rect[1]))
-    #     cv2.rectangle(numpy_image, top_left, bottom_right, (0, 255, 0), 2)  # 绿色矩形框，线宽2
-    #     cv2.putText(numpy_image, text, top_left, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)  # 蓝色文本，字体大小0.5，线宽1
-    # cv2.imwrite('test1.png', numpy_image)
-    final_result = analyze_text(combined_result)
-    return final_result
+    for rect, text in combined_result:
+        top_left = tuple(map(int, rect[0]))
+        bottom_right = tuple(map(int, rect[1]))
+        cv2.rectangle(numpy_image, top_left, bottom_right, (0, 255, 0), 2)  # 绿色矩形框，线宽2
+        cv2.putText(numpy_image, text, top_left, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)  # 蓝色文本，字体大小0.5，线宽1
+    cv2.imwrite('test1.png', numpy_image)
+    
+    for r in combined_result:
+        r[1] = remove_punctuation(r[1])
+        
+    result = combined_result.copy()
+    uni_result = analyze_text(combined_result)
+    return result,uni_result
