@@ -1,8 +1,7 @@
 from transformers import AutoTokenizer, AutoModel
 import torch
 from sklearn.metrics.pairwise import cosine_similarity
-def analyze_text(combined_result):
-    sentences = [row[1] for row in combined_result]
+def analyze_text(sentences): 
      
     # 加载模型和分词器
     tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
@@ -24,5 +23,5 @@ def analyze_text(combined_result):
                 repeat_sentence_indices.append(j) 
     # 通过倒序遍历删除元素，避免影响索引
     for i in sorted(repeat_sentence_indices, reverse=True):
-        del combined_result[i]
-    return combined_result
+        del sentences[i]
+    return sentences

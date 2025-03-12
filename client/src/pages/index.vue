@@ -55,7 +55,7 @@ function handleLeave() {
       @dragleave="handleLeave"
     >
       <button
-        class="rounded-lg bg-gray-800 px-4 py-2 text-white shadow-md transition duration-300 hover:bg-gray-500"
+        class="rounded-lg bg-#2a2a33 px-4 py-2 text-white shadow-md transition duration-300 hover:bg-gray-500"
         @click="selectFile"
       >
         选择一个PDF文件

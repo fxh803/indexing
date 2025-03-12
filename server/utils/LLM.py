@@ -6,7 +6,7 @@ def ask_deepseek_about_contextual_words(question):
    
     system_prompt = """
         The user will provide some keywords and sentences. 
-        Please find out some "contextual words" related to "keyword" in sentences and output them in JSON format. 
+        Please find out "contextual words" related to "keyword" in sentences and output them in JSON format. 
 
         EXAMPLE INPUT: 
         sentences = "The study explores the relationship between climate change, deforestation, and biodiversity loss. It highlights how rising temperatures exacerbate deforestation, which in turn accelerates biodiversity loss. The paper also discusses potential mitigation strategies, such as reforestation and sustainable land management."  

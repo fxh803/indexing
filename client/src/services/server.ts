@@ -10,17 +10,24 @@ const flowChartStore = useFlowChartStore() // 获取 store 实例
 const graphStore = useGraphStore()
 const { selectElement,selectedSentence } = storeToRefs(interactionStore)
 const {graph_edges, graph_nodes,other_edges } = storeToRefs(graphStore)
-const { flowchartImg, ocr_result,img_width,img_height,uni_ocr_result } = storeToRefs(flowChartStore)
+const { flowchartSvg, ocr_result ,uni_ocr_result, rects,flowchartImg,canvas_height, canvas_width ,offsetHeight,offsetWidth,img_height,img_width } = storeToRefs(flowChartStore)
 const { pdfContent, keywordsSentence,keywords,ai_output } = storeToRefs(pdfStore)
 export async function sendFlowChartApi() {
   try {
     const response = await axios.post('http://localhost:4444/uploadFlowChartApi', {
-      image_base64: flowchartImg.value,
+      svg: flowchartSvg.value,
+      canvas_width: canvas_width.value,
+      canvas_height: canvas_height.value,
     })
+    console.log(response.data)
     ocr_result.value = response.data.ocr_message
+    uni_ocr_result.value = response.data.uni_ocr_message
+    rects.value = response.data.rects
+    flowchartImg.value = response.data.img
+    offsetHeight.value = response.data.offsetHeight
+    offsetWidth.value = response.data.offsetWidth
     img_width.value = response.data.img_width
     img_height.value = response.data.img_height
-    uni_ocr_result.value = response.data.uni_ocr_message
   }
   catch (error) {
     console.error('Error sending image:', error)

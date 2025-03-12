@@ -1,121 +1,119 @@
 <script setup>
 import { storeToRefs } from 'pinia'
-import { sendFlowChartApi, generateIntrodutionApi } from '~/services/server.ts' // 引入 sendFlowChartApi 方法
+import { generateIntrodutionApi, sendFlowChartApi } from '~/services/server.ts'
 import { useFlowChartStore } from '~/stores/flowChartStore'
 import { usePdfStore } from '~/stores/pdfStore'
 import { useInteractionStore } from '~/stores/interaction'
 import { useGraphStore } from '~/stores/graphStore'
+import paper from 'paper'
 const flowChartStore = useFlowChartStore()
 const pdfStore = usePdfStore()
 const interactionStore = useInteractionStore()
 const graphStore = useGraphStore()
 const { myChart } = storeToRefs(graphStore)
-const { flowchartImg, ocr_result, img_width, img_height, uni_ocr_result } = storeToRefs(flowChartStore)
-const { loadedPage, totalPage, ai_output } = storeToRefs(pdfStore)
+const { flowchartSvg, ocr_result, uni_ocr_result, flowchartImg, rects, canvas_width, canvas_height, offsetHeight, offsetWidth, img_width, img_height } = storeToRefs(flowChartStore)
+const { loadedPage, totalPage, ai_output, color_dist } = storeToRefs(pdfStore)
 const { selectElement } = storeToRefs(interactionStore)
-const isDragging = ref(false)
-const fileInput = ref(null)
 const elementAreas = ref([])
-watch(flowchartImg, async (value) => {
-  if (value) {
-    await sendFlowChartApi();
+const showedKeywords = ref([])
+watch(flowchartSvg, async () => {
+  if (flowchartSvg.value) {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    // 初始化 Paper.js 画布
+    const paperCanvas = document.getElementById('paperCanvas');
+    paper.setup(paperCanvas);
+
+    const canvasContainer = document.querySelector('.canvas-container');
+    const computedStyle = window.getComputedStyle(canvasContainer);
+    const container_width = parseInt(computedStyle.width);
+    const container_height = parseInt(computedStyle.height);
+    paper.view.viewSize = new paper.Size(container_width, container_height);
+    canvas_width.value = container_width;
+    canvas_height.value = container_height;
+    await sendFlowChartApi()
+    // 加载图像
+    const image = new paper.Raster('data:image/png;base64,' + flowchartImg.value);  // 图片的路径可以是相对路径或 URL
+    // 图片加载完毕后进行操作
+    image.onLoad = () => {
+      // 将图片居中显示
+      image.position = paper.view.center;
+      image.size = new paper.Size(img_width.value, img_height.value);
+    };
   }
 });
-watch(ocr_result, value => {
-  if (ocr_result.value) {
+watch(color_dist, () => {
+  if (Object.keys(color_dist.value).length === uni_ocr_result.value.length) {
+    //先加rect的
+    rects.value.forEach(rect => {
+      const leftTop = rect[0]
+      const rightBottom = rect[1]
+      const text = rect[2]
+      const final_leftTop = [leftTop[0] + offsetWidth.value, leftTop[1] + offsetHeight.value]
+      const final_rightBottom = [rightBottom[0] + offsetWidth.value, rightBottom[1] + offsetHeight.value]
+      if (text) {
+        elementAreas.value.push({
+          x: final_leftTop[0],
+          y: final_leftTop[1],
+          width: final_rightBottom[0] - final_leftTop[0],
+          height: final_rightBottom[1] - final_leftTop[1],
+          content: text,
+          borderColor: 'rgba(150, 150, 150, 0.5)',
+          shadowColor: changeOpacity(color_dist.value[text.toLowerCase()], 0.7),
+        })
+        showedKeywords.value.push(text)
+      }
+    })
+    //再加rect没有的ocr结果
     ocr_result.value.forEach(value => {
-      const leftTop = value[0][0]
-      const rightBottom = value[0][1]
-      const original_width = img_width.value
-      const original_height = img_height.value
-      const flowchartImage = document.querySelector('.flowchartImage');
-      const computedStyle = window.getComputedStyle(flowchartImage);
-      const now_width = parseInt(computedStyle.width); // 实际宽度
-      const now_height = parseInt(computedStyle.height); // 实际高度
-      // 计算缩放比例
-      const scaleX = now_width / original_width;
-      const scaleY = now_height / original_height;
-      // 重新计算坐标
-      const newLeftTop = [leftTop[0] * scaleX, leftTop[1] * scaleY]
-      const newRightBottom = [rightBottom[0] * scaleX, rightBottom[1] * scaleY]
-      // console.log(leftTop, rightBottom, original_width, original_height, now_width, now_height, scaleX, scaleY,newLeftTop, newRightBottom)
-      elementAreas.value.push({
-        x: newLeftTop[0],
-        y: newLeftTop[1],
-        width: newRightBottom[0] - newLeftTop[0],
-        height: newRightBottom[1] - newLeftTop[1],
-        content: value[1],
-        borderColor: 'gray'
-      })
+      const padding = 3
+      const rect = value[0]
+      const leftTop = [rect[0][0] + offsetWidth.value, rect[0][1] + offsetHeight.value]
+      const rightBottom = [rect[1][0] + offsetWidth.value, rect[1][1] + offsetHeight.value]
+      const text = value[1]
+      if (!showedKeywords.value.includes(text)) {
+        elementAreas.value.push({
+          x: leftTop[0] - padding,
+          y: leftTop[1] - padding,
+          width: rightBottom[0] - leftTop[0] + 2*padding,
+          height: rightBottom[1] - leftTop[1] + 2*padding,
+          content: value[1],
+          borderColor: 'rgba(150, 150, 150, 0.5)',
+          shadowColor: changeOpacity(color_dist.value[text.toLowerCase()], 0.7),
+        })
+      }
+
 
     });
   }
+}, { deep: true })
 
+watch(selectElement, value => {
+  if (selectElement.value) {
+    elementAreas.value.forEach(area => {
+      if (area.content.toLowerCase() != selectElement.value) {
+        area.shadowColor = 'rgba(0, 0, 0, 0)'
+      }
+      else {
+        area.shadowColor = changeOpacity(color_dist.value[area.content.toLowerCase()], 0.7)
+      }
+    });
+  }
 })
-
-// 选择文件
-function selectFile() {
-  fileInput.value.click()
-}
-
-// 拖动悬浮效果
-function handleOver() {
-  isDragging.value = true
-}
-
-// 拖动离开效果
-function handleLeave() {
-  isDragging.value = false
-}
 function elementAreaClick(area) {
-  selectElement.value = area.content
-  elementAreas.value.forEach(area => {
-    if (area.borderColor === 'rgba(144, 238, 144)') {
-      area.borderColor = 'gray'
-    }
-  });
-  area.borderColor = 'rgba(144, 238, 144)'
-}
-// 处理文件拖放
-function handleDrop(event) {
-  const file = event.dataTransfer.files[0] // 获取拖放的文件
-  if (file && file.type.startsWith('image/')) {
-    const reader = new FileReader()
-
-    reader.onload = (e) => {
-      flowchartImg.value = e.target.result // 设置图片的 URL
-    }
-
-    reader.readAsDataURL(file) // 将文件读取为 Data URL
+  if (area.content) {
+    selectElement.value = area.content.toLowerCase()
   }
-  else {
-    alert('请选择有效的图片文件。')
-  }
-  isDragging.value = false
+
 }
 
-// 处理文件选择
-function handleFileChange(event) {
-  const file = event.target.files[0] // 获取用户选择的文件
-  if (file && file.type.startsWith('image/')) {
-    const reader = new FileReader()
-
-    reader.onload = (e) => {
-      flowchartImg.value = e.target.result // 设置图片的 URL
-    }
-
-    reader.readAsDataURL(file) // 将文件读取为 Data URL
-  }
-  else {
-    alert('请选择有效的图片文件。')
-  }
-}
 
 // 清除图片
 function clearImage() {
-  myChart.value.dispose()
+  if (myChart.value) {
+    myChart.value.dispose()
+  }
   myChart.value = null
-  flowchartImg.value = null // 清空图片
+  flowchartSvg.value = null // 清空图片
   elementAreas.value = []
   ocr_result.value = null
   uni_ocr_result.value = null
@@ -124,49 +122,64 @@ function clearImage() {
 onBeforeUnmount(() => {
   clearImage()
 })
-
+function changeOpacity(rgbaString, newOpacity) {
+  if (!rgbaString) {
+    return;
+  }
+  const match = rgbaString.match(/rgba?\((\d+),\s*(\d+),\s*(\d+),?\s*([\d.]*)\)/);
+  if (match) {
+    const r = parseInt(match[1], 10); // 红色值
+    const g = parseInt(match[2], 10); // 绿色值
+    const b = parseInt(match[3], 10); // 蓝色值
+    return `rgba(${r}, ${g}, ${b}, ${newOpacity})`;
+  }else{
+    return rgbaString
+  }
+}
 </script>
 
 <template>
-  <div class="p-5">
-    <div class="relative h-full w-full flex items-center  flex-col rounded-lg bg-white p-5 shadow-md"
-      @drop.prevent="handleDrop" @dragover.prevent="handleOver" @dragleave="handleLeave">
-      <div v-if="!flowchartImg"
-        class="h-full w-full flex items-center justify-center border-2 border-gray-300 rounded-lg border-dashed">
-        <button class="rounded-lg bg-gray-800 px-4 py-2 text-white shadow-md transition duration-300 hover:bg-gray-500"
-          @click="selectFile">
-          选择流程图
-        </button>
-        <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="handleFileChange">
-      </div>
+  <div class="p-5 pb-0">
+    <div :class="{ 'p-5': !flowchartSvg }"
+      class="overflow-hidden relative h-full w-full flex items-center  flex-col rounded-lg bg-white shadow-md">
+      <TheFlowChartDropSpace />
       <!-- 显示上传的图片 -->
-      <div v-if="flowchartImg" class="w-full h-3/4 justify-center items-center flex">
-        <div class="relative w-auto h-auto">
-          <img :src="flowchartImg" alt="Uploaded Image" class="flowchartImage object-contain">
-
-          <div v-for="(area, index) in elementAreas" :key="index"
-            class="absolute bg-white bg-opacity-50 cursor-pointer p-2" :style="{
-              left: area.x + 'px',
-              top: area.y + 'px',
-              transform: 'translate(-2px,-2px)',
-              border: '2px solid ' + area.borderColor,
-              width: area.width + 'px',
-              height: area.height + 'px'
-            }" @click="elementAreaClick(area)">
+      <div v-if="flowchartSvg" class="w-full h-full flex flex-col ">
+        <!-- 顶部栏 -->
+        <div class="relative z-10  h-50px w-full flex justify-center items-center bg-#2a2a33 shadow-md">
+          <div class="absolute left-10px flex items-center">
+            <div class="i-fa6-solid:table color-white w-20px h-20px"></div>
+            <div class="ml-5px font-size-4 color-white">FlowChart</div>
           </div>
-
-
-          <button class="absolute right--20px top--20px border-2 rounded-full bg-white p-2 text-black"
+          <button
+            class="scale-80 transform translate--50% absolute right-0px top-50% border-2 rounded-full bg-white p-2 text-black  transition-transform transform hover:scale-90 active:scale-80"
             @click="clearImage">
             <div i-bi-x-lg />
           </button>
         </div>
-      </div>
-      <div v-if="flowchartImg" class="w-full h-1/4 relative flex justify-center ">
-        <div class="overflow-auto w-full h-full">{{ ai_output }}</div>
-      </div>
+        <!-- 下部空间 -->
+        <div class="canvas-container relative w-full h-full flex justify-center items-center">
 
-      <div v-if="isDragging" class="pointer-events-none absolute left-0 top-0 h-full w-full bg-black opacity-50" />
+          <!-- <img :src="flowchartSvg" alt="Uploaded Image" class="flowchartImage object-contain"> -->
+          <canvas ref="paperCanvas" id="paperCanvas"></canvas>
+          <div v-for="(area, index) in elementAreas" :key="index"
+            class="absolute bg-white bg-opacity-0 cursor-pointer rounded transition-transform transform hover:scale-105 active:scale-95"
+            :style="{
+              left: area.x + 'px',
+              top: area.y + 'px',
+              border: '3px solid ' + area.borderColor,
+              width: area.width + 'px',
+              height: area.height + 'px',
+              boxShadow: '4px 4px 4px 1px ' + area.shadowColor, /* xoffset, yoffset, blur, spread, color */
+            }" @click="elementAreaClick(area)"></div>
+
+        </div>
+      </div>
+      <!-- <div v-if="flowchartSvg" class="w-full h-1/4 relative flex justify-center ">
+        <div class="overflow-auto w-full h-full">{{ ai_output }}</div>
+      </div> -->
+
+
     </div>
   </div>
 </template>

@@ -10,7 +10,11 @@ export const usePdfStore = defineStore('pdf', {
     loadedPage:0,
     keywordsSentence:[],
     keywords:[],
-    ai_output:''
+    ai_output:'',
+    color_dist:{},
+    scale:1,
+    bestScale:1,
+    fitParent:true,
   }),
   getters: {
   },

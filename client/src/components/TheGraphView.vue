@@ -11,22 +11,35 @@ const interactionStore = useInteractionStore()
 const pdfStore = usePdfStore()
 const graphStore = useGraphStore()
 const { selectElement, isHighlighting } = storeToRefs(interactionStore)
-const { graph_edges, graph_nodes, other_edges,myChart } = storeToRefs(graphStore)
-const { loadedPage, totalPage } = storeToRefs(pdfStore)
-const { flowchartImg,uni_ocr_result } = storeToRefs(flowChartStore)
+const { graph_edges, graph_nodes, other_edges, myChart } = storeToRefs(graphStore)
+const { loadedPage, totalPage,color_dist } = storeToRefs(pdfStore)
+const { flowchartSvg, uni_ocr_result } = storeToRefs(flowChartStore)
 let custom_nodes = []
 let custom_links = []
 const containerWidth = ref(0)
 const containerHeight = ref(0)
-// 保存节点默认颜色
-const defaultColors = ref({});
 const isGenerating = ref(false)
+const nodePrepared = ref(false)
+const edgePrepared = ref(false)
 const defaultNodeColor = '#5c7bd9'
-
+function changeOpacity(rgbaString, newOpacity) {
+  if (!rgbaString) {
+    return;
+  }
+  const match = rgbaString.match(/rgba?\((\d+),\s*(\d+),\s*(\d+),?\s*([\d.]*)\)/);
+  if (match) {
+    const r = parseInt(match[1], 10); // 红色值
+    const g = parseInt(match[2], 10); // 绿色值
+    const b = parseInt(match[3], 10); // 蓝色值
+    return `rgba(${r}, ${g}, ${b}, ${newOpacity})`;
+  }else{
+    return rgbaString
+  }
+}
 async function generateKnowledgeGraph() {
   isGenerating.value = true;
   await generateKnowledgeGraphApi();
-  await findEntitiesApi();
+  // await findEntitiesApi();
   isGenerating.value = false;
 }
 
@@ -39,7 +52,7 @@ function createGraph() {
 
     const option = {
       title: {
-        text: 'Knowledge Graph',
+        // text: 'Knowledge Graph',
         top: 'bottom',
         left: 'right',
       },
@@ -64,6 +77,11 @@ function createGraph() {
       },
       animationDuration: 1500,
       animationEasingUpdate: 'quinticInOut',
+      graphic: {
+        type: 'group',
+        position: [0, 0],  // 保证图表的原点位置
+        size: [5000, 5000],  // 设置适当的大小来确保缩放后不被限制
+      },
 
       series: [
         {
@@ -74,14 +92,18 @@ function createGraph() {
             position: 'right',
             formatter: '{b}',
           },
+          roam: true,  // 允许平移和缩放
+          center: ['50%', '50%'],
           draggable: true,
+          emphasis: {
+            focus: 'adjacency',
+          },
           data: custom_nodes,
           // categories: custom_categories,
           force: {
             edgeLength: 120,
             repulsion: 200,
             gravity: 0.1,
-            boundingBox: 'all', // 限制节点在图表区域内
           },
           edges: custom_links,
           lineStyle: {
@@ -95,8 +117,19 @@ function createGraph() {
     }
     myChart.value.setOption(option)
     myChart.value.hideLoading()
-    option.series[0].data.forEach(node => {
-      defaultColors.value[node.name] = node.itemStyle.color;
+
+    myChart.value.on('click', function (params) {
+      // 只有点击节点时才会触发
+      if (params.dataType === 'node') {
+        const nodeId = params.data.id;
+        const nodeName = params.data.name;
+        selectElement.value = nodeName
+        console.log(`Node clicked: ${nodeName} (ID: ${nodeId})`);
+      }
+      else if (params.dataType === 'edge') {
+        const evidence = params.data.evidence;
+        console.log(evidence);
+      }
     });
   }
   else {
@@ -109,7 +142,7 @@ watch(graph_nodes, (node) => {
     node.forEach((item) => {
       custom_nodes.push({
         id: `${item['id']}`,
-        name: `${item['label']}`,
+        name: `${item['label'].toLowerCase()}`,
         symbolSize: 15,
         itemStyle: { color: defaultNodeColor },
         // category: Number.parseInt(item[3], 10),
@@ -119,6 +152,10 @@ watch(graph_nodes, (node) => {
         label: { show: true },
       })
     })
+    nodePrepared.value = true
+    if (edgePrepared.value) {
+      createGraph()
+    }
   }
 })
 watch(graph_edges, (edge) => {
@@ -129,14 +166,22 @@ watch(graph_edges, (edge) => {
         source: `${item['source_id']}`,
         target: `${item['target_id']}`,
         value: `${item['label']}`,
+        evidence: `${item['evidence']}`,
         label: {
           show: true,
           formatter: `${item['label']}`, // Display the relationship as the edge label
           fontSize: 12,
           color: '#333',
         },
+        lineStyle: {
+          width: 5, // 设置边的粗细，可以根据需要调整
+        },
       })
     })
+    edgePrepared.value = true
+    if (nodePrepared.value) {
+      createGraph()
+    }
   }
 })
 watch(other_edges, (edge) => {
@@ -151,6 +196,7 @@ watch(other_edges, (edge) => {
           source: source_id,
           target: `${nodes_already_in.length + i}`,
           value: `${item['label']}`,
+          evidence: `${item['evidence']}`,
           label: {
             show: true,
             formatter: `${item['label']}`,
@@ -161,7 +207,7 @@ watch(other_edges, (edge) => {
 
         custom_nodes.push({
           id: `${nodes_already_in.length + i}`,
-          name: `${item['contextual word']}`,
+          name: `${item['contextual word'].toLowerCase()}`,
           symbolSize: 8,
           itemStyle: { color: defaultNodeColor },
           // category: Number.parseInt(item[3], 10),
@@ -175,11 +221,10 @@ watch(other_edges, (edge) => {
       }
 
     })
-    createGraph()
+    // createGraph()
   }
 })
-
-watch(selectElement, value => {
+watch(selectElement, value => {//如果有人选择了
   // 获取当前图数据
   if (!myChart.value) {
     return;
@@ -200,7 +245,7 @@ watch(selectElement, value => {
   if (nodeIndex !== -1) {
     // 更新节点样式
     graphSeries.data[nodeIndex].itemStyle = {
-      color: 'rgba(144, 238, 144)'
+      color: changeOpacity(color_dist.value[selectElement.value.toLowerCase()], 0.7),
     };
   }
   // 重新渲染图
@@ -225,7 +270,12 @@ onMounted(() => {
   <div class="p-5">
     <div class="relative h-full w-full flex items-center justify-center overflow-hidden rounded-lg bg-white shadow-md">
       <div id="echarts-container" class="h-full w-full" />
-      <button v-if="!myChart&&flowchartImg" :disabled="isHighlighting||!uni_ocr_result"
+      <div class="absolute left-10px top-10px flex items-center">
+        <div class="i-bxs:network-chart w-25px h-25px"></div>
+        <div class="ml-5px font-size-4">Knowledge Graph</div>
+      </div>
+
+      <button v-if="!myChart" :disabled="isHighlighting || !uni_ocr_result"
         class="absolute top-1/2 left-1/2 transform translate--50%  flex justify-center items-center h-30px w-180px font-size-3 disabled:bg-gray-400 disabled:cursor-not-allowed mt-4 rounded-lg bg-blue-500 px-4 py-2 text-white shadow-md transition duration-300 hover:bg-blue-700"
         @click="generateKnowledgeGraph()">
         <div v-if="!isGenerating">generateKnowledgeGraph</div>

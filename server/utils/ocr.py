@@ -2,7 +2,7 @@ import paddleocr  # 添加: 导入paddleocr库
 import numpy as np
 from math import sqrt
 from utils.bert_analyze import analyze_text
-import string
+import string 
 import cv2  # 导入OpenCV库
 def remove_punctuation(text):
     # 创建翻译表，将标点符号映射为 None
@@ -46,7 +46,8 @@ def rectangles_distance(rect1, rect2):
     distance = sqrt((rect2_center_x-rect1_center_x)**2+(rect2_center_y-rect1_center_y)**2) 
     return distance
 
-def ocr_image(image):
+def ocr_image(image): 
+    
     numpy_image = np.array(image)
     ocr = paddleocr.PaddleOCR(use_angle_cls=True, lang='en')  # 初始化PaddleOCR
     result = ocr.ocr(numpy_image, cls=True)  # 使用PaddleOCR进行图像识别
@@ -85,5 +86,5 @@ def ocr_image(image):
         r[1] = remove_punctuation(r[1])
         
     result = combined_result.copy()
-    uni_result = analyze_text(combined_result)
+    uni_result = analyze_text([row[1] for row in combined_result])
     return result,uni_result
